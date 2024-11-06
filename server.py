@@ -32,7 +32,6 @@ def handle_client(client_socket, client_address):
 			if message_type == "MESSAGE":
 				client_id = socket_message["data"]["client_id"]
 				for client in active_clients:
-					print(client_id, client[0])
 					if client_id == client[0]:
 						socket_message = json.dumps(socket_message)
 						client[2].send(socket_message.encode("utf-8"))
