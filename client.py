@@ -15,7 +15,7 @@ class ChatClient:
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.sock.connect(('localhost', 5555))
 		self.running = True
-		self.pub_keys: list[tuple[str, str, str]] = []  # (client_id, client_pub_key, client_socket)
+		self.pub_keys: list[list[str, list, str]] = []  # (client_id, client_pub_key, client_socket)
 		
 		# Tkinter GUI
 		self.root = tk.Tk()
@@ -37,8 +37,9 @@ class ChatClient:
 		self.join_button.grid(column=2, row=2)
 
 	def send_pub_key(self):
-		message = f"PUB_KEY||{json.dumps(self.public_key)}"
-		self.sock.send(message.encode("utf-8"))
+		socket_message = {"type": "PUB_KEY", "data": self.public_key}
+		socket_message = json.dumps(socket_message)
+		self.sock.sendall(socket_message.encode("utf-8"))
 		
 		# Iterate through every widget inside the root
 		for widget in self.root.winfo_children():
@@ -70,7 +71,7 @@ class ChatClient:
 	def get_available_clients(self) -> str:
 		clients_str = ""
 		for client in self.pub_keys:
-			clients_str += f"Client id: {client[0]}, client pub key: {client[1]}\n"
+			clients_str += f"{'Client' if self.public_key != tuple(client[1]) else 'My'} id: {client[0]}, client pub key: {client[1]}\n"
 		return clients_str
  
 	def send_message(self):
@@ -80,25 +81,28 @@ class ChatClient:
 		print(f"Send message to client: {client_id}, message: {message}")
 		for client in self.pub_keys:
 			if client[0] == client_id:
-				pub_key = json.loads(client[1])
-				encrypted_data = f"MESSAGE||{client_id}||{encrypt(pub_key, message)}"
+				pub_key = client[1]
+				socket_message = {"type": "MESSAGE", "data": {"client_id": client_id, "message": encrypt(pub_key, message)}}
+				socket_message = json.dumps(socket_message)
 
-				self.sock.sendall(encrypted_data.encode("utf-8"))
+				self.sock.sendall(socket_message.encode("utf-8"))
 		
 	def receive_messages(self):
 		while self.running:
 			try:
 				data = self.sock.recv(1024)
 				if data:
-					type, message = data.decode("utf-8").split("||")
-					if type == "MESSAGE":
-						print(message)
+					socket_message = json.loads(data.decode("utf-8"))
+					message_type = socket_message.get("type", "")
+					print(socket_message)
+					if message_type == "MESSAGE":
+						message = socket_message["data"]["message"]
 						decrypted_message = decrypt(self.private_key, message)
 						self.messages_incoming.config(state='normal')
 						self.messages_incoming.insert(tk.END, decrypted_message + "\n")
 						self.messages_incoming.config(state='disabled')
-					elif type == "ACTIVE_CLIENTS":
-						clients = json.loads(message)
+					elif message_type == "ACTIVE_CLIENTS":
+						clients = socket_message["data"]
 						print(clients)
 						self.pub_keys = clients
 						self.available_clients.config(state='normal')
@@ -121,6 +125,3 @@ class ChatClient:
 
 client = ChatClient()
 client.run()
-
-# TODO: change color of all elements
-# TODO: change structure of messages

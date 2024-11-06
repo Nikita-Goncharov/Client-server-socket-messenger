@@ -25,7 +25,6 @@ M^e mod n = Encrypt(M)
 """
 
 
-# TODO:алгоритм евклида + расширеная версия
 def gcd(a, b):  # taking bigger divider for two prime numbers
     while b != 0:
         a, b = b, a % b

@@ -5,7 +5,6 @@ from random import randint
 
 
 class SocketEncoder(json.JSONEncoder):
-
 	def default(self, obj):
 		if isinstance(obj, socket.socket):
 			return str(obj)
@@ -14,7 +13,7 @@ class SocketEncoder(json.JSONEncoder):
 
 
 next_client_id = 0
-active_clients: list[tuple[str, str, socket.socket]] = [] # TODO: set in redis ???
+active_clients: list[tuple[str, str, socket.socket]] = []
 
 def handle_client(client_socket, client_address):
 	global active_clients
@@ -27,16 +26,16 @@ def handle_client(client_socket, client_address):
 				break
 
 			
-			data = data.decode('utf-8')
-			print(data)
-			data = data.split("||")
-			message_type = data[0]
+			socket_message = json.loads(data.decode('utf-8'))
+			message_type = socket_message.get("type", "")
+
 			if message_type == "MESSAGE":
-				client_id, message = data[1], data[2]
+				client_id = socket_message["data"]["client_id"]
 				for client in active_clients:
+					print(client_id, client[0])
 					if client_id == client[0]:
-						message = f"MESSAGE||{message}"
-						client[2].send(message.encode("utf-8"))
+						socket_message = json.dumps(socket_message)
+						client[2].send(socket_message.encode("utf-8"))
 	finally:
 		for i, client in enumerate(active_clients):
 			if client[2] == client_socket:
@@ -62,13 +61,13 @@ def start_server(host='localhost', port=5555):
 		client_socket, client_address = server_socket.accept()
 		print(f"Client connected from {client_address}")
 
-		data = client_socket.recv(1024).decode('utf-8')
+		socket_message = client_socket.recv(1024).decode('utf-8')
 	
-		data = data.split("||")		
-		message_type = data[0]
+		socket_message = json.loads(socket_message)
+		message_type = socket_message.get("type", "")
 		
 		if message_type == "PUB_KEY":
-			pub_key = data[1]
+			pub_key = socket_message["data"]
 			new_client = (f"{next_client_id}", pub_key, client_socket)
 			active_clients.append(new_client)
 			next_client_id += 1
@@ -77,9 +76,10 @@ def start_server(host='localhost', port=5555):
 		
 		# send updated active_clients to clients
 		for client in active_clients:
-			message = f"ACTIVE_CLIENTS||{json.dumps(active_clients, cls=SocketEncoder)}"
-			print(f"Send list of clients to new client: {message}")
-			client[2].send(message.encode("utf-8"))
+			socket_message = {"type": "ACTIVE_CLIENTS", "data": active_clients}
+			socket_message = json.dumps(socket_message, cls=SocketEncoder)
+			print(f"Send list of clients to new client: {socket_message}")
+			client[2].send(socket_message.encode("utf-8"))
 			
 
 		# Handle client communication in a new thread
